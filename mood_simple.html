@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mood Recognizer</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0f0f0f; color: #eee; font-family: monospace; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+  h1 { font-size: 1.6rem; margin-bottom: 4px; }
+  .sub { color: #555; font-size: 0.75rem; margin-bottom: 30px; }
+  .box { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 28px; width: 100%; max-width: 420px; }
+  .drop { border: 2px dashed #333; border-radius: 8px; padding: 30px; text-align: center; cursor: pointer; transition: .2s; }
+  .drop:hover, .drop.over { border-color: #0cf; background: #0a1a1c; }
+  .drop p { color: #555; font-size: 0.8rem; margin-top: 6px; }
+  input[type=file] { display: none; }
+  button { width: 100%; margin-top: 14px; padding: 12px; background: #0cf; border: none; border-radius: 8px; color: #000; font-family: monospace; font-size: 0.95rem; font-weight: bold; cursor: pointer; transition: .2s; }
+  button:hover { background: #09b; }
+  button:disabled { background: #222; color: #555; cursor: not-allowed; }
+  audio { width: 100%; margin-top: 12px; display: none; }
+  .result { margin-top: 20px; background: #111; border-radius: 8px; padding: 20px; text-align: center; display: none; }
+  .emoji { font-size: 3.5rem; }
+  .mood { font-size: 1.5rem; font-weight: bold; margin: 8px 0 4px; text-transform: capitalize; }
+  .msg { font-size: 0.8rem; color: #666; margin-bottom: 14px; }
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 0.75rem; }
+  .bar-label { width: 65px; color: #888; text-align: right; }
+  .bar-bg { flex: 1; height: 14px; background: #222; border-radius: 3px; overflow: hidden; }
+  .bar-fill { height: 100%; background: #0cf; border-radius: 3px; transition: width .6s; }
+  .bar-fill.top { background: #0f0; }
+  .note { color: #333; font-size: 0.7rem; text-align: center; margin-top: 20px; }
+</style>
+</head>
+<body>
+
+<h1>🎙️ Mood Recognizer</h1>
+<p class="sub">speech emotion detection · first intern project · ~65% accuracy</p>
+
+<div class="box">
+  <div class="drop" id="drop" onclick="document.getElementById('fi').click()">
+    <div style="font-size:2rem">🎵</div>
+    <strong>Drop audio file here</strong>
+    <p>or click to upload · .wav recommended</p>
+  </div>
+  <input type="file" id="fi" accept=".wav,.mp3,.ogg">
+  <audio id="player" controls></audio>
+  <button id="btn" onclick="analyze()" disabled>Analyze Mood →</button>
+
+  <div class="result" id="result">
+    <div class="emoji" id="emoji"></div>
+    <div class="mood" id="mood"></div>
+    <div class="msg" id="msg"></div>
+    <div id="bars"></div>
+  </div>
+</div>
+
+<p class="note">⚠️ demo mode — run app.py for real predictions · dataset: RAVDESS @ Kaggle</p>
+
+<script>
+  const MOODS = {
+    happy:   { e:'😊', c:'#FFD700', m:'You sound happy!' },
+    sad:     { e:'😢', c:'#4169E1', m:'Hope things get better!' },
+    angry:   { e:'😠', c:'#FF4500', m:'Take a deep breath!' },
+    neutral: { e:'😐', c:'#aaa',    m:'Calm and neutral.' },
+    fearful: { e:'😨', c:'#a855f7', m:"It's okay, you're safe." }
+  };
+
+  const drop = document.getElementById('drop');
+  const fi   = document.getElementById('fi');
+
+  drop.addEventListener('dragover', e => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', e => { e.preventDefault(); drop.classList.remove('over'); load(e.dataTransfer.files[0]); });
+  fi.addEventListener('change', e => load(e.target.files[0]));
+
+  function load(file) {
+    if (!file) return;
+    document.getElementById('player').src = URL.createObjectURL(file);
+    document.getElementById('player').style.display = 'block';
+    document.getElementById('btn').disabled = false;
+    document.getElementById('result').style.display = 'none';
+  }
+
+  async function analyze() {
+    const btn = document.getElementById('btn');
+    btn.disabled = true; btn.textContent = 'Analyzing...';
+    await new Promise(r => setTimeout(r, 1800));
+
+    const keys = Object.keys(MOODS);
+    const pick = keys[Math.floor(Math.random() * keys.length)];
+    const conf = (Math.random() * 25 + 55).toFixed(1);
+
+    // fake probabilities
+    let rem = 100, probs = {};
+    keys.forEach((k, i) => {
+      if (i === keys.length - 1) probs[k] = +rem.toFixed(1);
+      else if (k === pick) { probs[k] = +conf; rem -= +conf; }
+      else { let v = +(rem / (keys.length - i - 1) * (Math.random() * .6 + .2)).toFixed(1); probs[k] = v; rem -= v; }
+    });
+
+    const m = MOODS[pick];
+    document.getElementById('emoji').textContent = m.e;
+    document.getElementById('mood').textContent = pick;
+    document.getElementById('mood').style.color = m.c;
+    document.getElementById('msg').textContent = m.m;
+
+    const sorted = Object.entries(probs).sort((a,b) => b[1]-a[1]);
+    document.getElementById('bars').innerHTML = sorted.map(([k,v]) => `
+      <div class="bar-row">
+        <span class="bar-label">${k}</span>
+        <div class="bar-bg"><div class="bar-fill ${k===pick?'top':''}" style="width:${v}%"></div></div>
+        <span style="color:#555;font-size:.7rem;width:34px">${v}%</span>
+      </div>`).join('');
+
+    document.getElementById('result').style.display = 'block';
+    btn.disabled = false; btn.textContent = 'Analyze Mood →';
+  }
+</script>
+</body>
+</html>
